@@ -1,0 +1,32 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ubereats",
+  "version": "0.1.0",
+  "description": "Uber Eats order history, receipts and group-order ledgers through MCP.",
+  "author": {
+    "name": "zyx1121",
+    "url": "https://github.com/zyx1121"
+  },
+  "repository": "https://github.com/zyx1121/ubereats",
+  "license": "MIT",
+  "keywords": [
+    "ubereats",
+    "mcp",
+    "codex",
+    "claude-code"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Uber Eats",
+        "shortDescription": "Uber Eats receipts and group-order ledgers",
+        "developerName": "zyx1121",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ]
+      }
+    }
+  }
+}
