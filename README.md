@@ -1,70 +1,86 @@
-# Uber Eats
+<div align="center">
 
-Order history, itemized receipts and group-order debt ledgers through 4 native MCP tools.
+<h1>Uber Eats</h1>
 
-An independent plugin for Codex and Claude Code. Ask your agent to perform the
-task; MCP is the public interface and scripts are the implementation. Extracted
-from [zyx1121/plugin](https://github.com/zyx1121/plugin).
+<p><strong>Uber Eats order history, receipts and group-order ledgers as MCP tools.</strong></p>
 
-## Install
+[![CI](https://img.shields.io/github/actions/workflow/status/zyx1121/ubereats/check.yml?branch=main&style=flat-square&label=CI)](https://github.com/zyx1121/ubereats/actions)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square)](https://github.com/zyx1121/marketplace)
+[![License](https://img.shields.io/github/license/zyx1121/ubereats?style=flat-square)](LICENSE)
 
-Requires Bun (tested with 1.3.13) and uv on the host PATH.
+**English** | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
+
+</div>
+
+Group orders leave you with receipts to read and friends who owe you money. This plugin gives Codex and Claude Code 4 tools that list your orders, save itemized receipts and keep a debt ledger up to date. It cannot order or pay.
+
+## Features
+
+- **Lists orders**: order metadata from your Uber Eats account, saved as `index.json`.
+- **Saves receipts**: itemized receipts as JSON, with an index and a summary.
+- **Keeps a group-order ledger**: adds new debts to `debts.csv` and keeps paid states, dates, notes and real names.
+- **Exports a Safari session**: writes the live cookie to a mode-600 file, on macOS.
+
+## Quick start
 
 ```sh
-# Claude Code
 claude plugin marketplace add zyx1121/marketplace
 claude plugin install ubereats@zyx1121
-
-# Codex
-codex plugin marketplace add zyx1121/marketplace
-codex plugin add ubereats@zyx1121
 ```
 
-Restart the client session after installation. The committed `dist/server.js`
-bundle needs no `bun install` in the plugin cache. Both manifests are generated
-from `plugin.json` and `mcp.json`; the marketplace pins release commits.
+Codex: `codex plugin marketplace add zyx1121/marketplace`, then `codex plugin add ubereats@zyx1121`. Log in to Uber Eats in Safari, open a new session and ask "List my Uber Eats orders from this month".
 
-## Use
+The plugin needs Bun and uv on the host `PATH`. The MCP server ships bundled.
 
-Ask your agent to list recent orders first, fetch selected receipts, or update
-an existing group-order ledger. There is no ordering or payment tool.
+## Usage
 
-| Tool | Result and side effects |
-|---|---|
-| `ubereats_list_orders` | Lists order metadata and writes `index.json` to `out` |
-| `ubereats_fetch_receipts` | Writes receipt JSON, index and summary files to `out` |
-| `ubereats_update_ledger` | Rewrites `debts.csv` and `names.csv`; requires `confirm: true` |
-| `ubereats_dump_cookie` | Exports a live Safari session to a mode-0600 file; requires `confirm: true` |
+| Tool | Result | Writes |
+|------|--------|--------|
+| `ubereats_list_orders` | order metadata | `index.json` in `out` |
+| `ubereats_fetch_receipts` | receipts for the selected orders | receipt JSON, an index and a summary in `out` |
+| `ubereats_update_ledger` | new group-order debts | `debts.csv` and `names.csv`. Needs `confirm: true` |
+| `ubereats_dump_cookie` | the live Safari session | a mode-600 cookie file. Needs `confirm: true`, macOS only |
 
-The first three tools work on macOS and Linux with uv. Cookie export requires
-macOS. Missing dependencies hide the affected tools and are reported on stderr.
+- Start with `ubereats_list_orders`, then fetch the receipts that you want.
+- The ledger counts only your own group orders that were not canceled, and it leaves out your share. A rerun does not add a debt twice.
+- Amounts are item subtotals. They do not split delivery fees or discounts.
+- Use absolute `out` and `csv_dir` paths. The defaults (`./ue_receipts_out`, `./ue_ledger`) are relative to the working directory of the MCP server.
 
-Authentication uses, in order: an explicit `cookie_file`, Safari's binarycookies
-file if it exists, then `~/.config/ubereats/cookie.txt`. On Linux provide a raw
-Cookie header file. If macOS denies access to Safari's cookie jar, grant the host
-Full Disk Access or supply `cookie_file` explicitly. Cookies are credentials;
-keep them outside this repository. No existing credentials need to move.
+## Configuration
 
-These tools use Uber Eats internal web APIs with a browser session. HTTP 401/403
-reports rejected credentials; some expired sessions return an empty list instead.
-An empty list does not establish that there are no orders. Reauthenticate in the
-browser before relying on that result. The API can change independently of this
-plugin.
+The tools look for a session in this order: the `cookie_file` argument, the Safari cookie jar, then `~/.config/ubereats/cookie.txt`. On Linux, put a raw `Cookie` header in that file.
 
-Receipt output defaults to `./ue_receipts_out`; ledger output defaults to
-`./ue_ledger`, relative to the MCP server's working directory. Use absolute `out`
-and `csv_dir` paths for persistent storage. Existing ledger rows, paid state,
-paid dates, notes and real-name mappings are preserved. Only your own uncancelled
-group orders contribute new debts, excluding your share. Rerunning does not add
-existing debts again. Amounts are item subtotals; order-list fallback values are
-estimates and do not allocate delivery fees or discounts.
+| Variable | Sets | Default |
+|----------|------|---------|
+| `UBEREATS_MCP_MAX_STRING_CHARS` | longest string in a result | `20000` |
+| `UBEREATS_MCP_MAX_TOTAL_CHARS` | largest result | `120000` |
+| `UBEREATS_FORCE_PLATFORM` | platform for registration tests only | the real platform |
 
-## Migration
+If macOS blocks the Safari cookie jar, give the MCP host Full Disk Access or pass `cookie_file`. Cookies are credentials, so keep them out of any repository.
 
-Install `ubereats@zyx1121` before updating zyx to 0.27.0. Short tool names,
-parameters, output schemas and confirmation gates are preserved. Claude Code's
-provider changes from `plugin_zyx_utils` to `plugin_ubereats_ubereats`. Remove any
-manual registration of the same server to avoid duplicates.
+## How it works
+
+The Bun MCP server registers the tools that the host can run, and it hides the rest with a reason on stderr. Each call runs a Python script under uv. The scripts call the internal Uber Eats web APIs with your browser session.
+
+## Limits
+
+- The internal APIs can change at any time.
+- An expired session can return an empty list instead of HTTP 401. Log in again before you trust an empty result.
+- The cookie export needs macOS. The other 3 tools also work on Linux.
+
+## For AI agents
+
+Facts for coding agents and LLM tools. The rules for changing the code are in [AGENTS.md](AGENTS.md).
+
+- **Summary**: Claude Code and Codex plugin with 4 MCP tools for Uber Eats order history, receipts, a group-order debt ledger and Safari cookie export.
+- **Type**: plugin
+- **Interfaces**: MCP `ubereats` (stdio, `dist/server.js`). Python scripts in `scripts/` run under uv.
+- **Install**: `claude plugin install ubereats@zyx1121`, after `claude plugin marketplace add zyx1121/marketplace`
+- **Run**: the host starts the MCP server
+- **Verify**: call `ubereats_list_orders` with a live session and an absolute `out` path
+- **Config**: `UBEREATS_MCP_MAX_STRING_CHARS`, `UBEREATS_MCP_MAX_TOTAL_CHARS`, and a `cookie_file` argument
+- **Secrets**: the Uber Eats session cookie, in Safari or in `~/.config/ubereats/cookie.txt`
+- **Limits**: no ordering or payment. An empty list can mean an expired session.
 
 ## Development
 
@@ -74,20 +90,7 @@ bun run check
 claude plugin validate .
 ```
 
-Tests are offline: synthetic results, fake executables, isolated bundled MCP
-sessions and ledger/cookie/receipt regressions. They do not modify live apps,
-accounts or personal files.
-
-`UBEREATS_MCP_MAX_STRING_CHARS` and `UBEREATS_MCP_MAX_TOTAL_CHARS` control
-output truncation (defaults 20000/120000); the corresponding `UTILS_` names remain
-fallbacks. `UBEREATS_FORCE_PLATFORM` is a registration-test override and does
-not emulate another operating system.
-
-- `src/`: MCP schemas, host checks and subprocess execution
-- `scripts/`, `lib/`: domain implementation
-- `dist/server.js`: standalone bundled runtime
-- `plugin.json`, `mcp.json`: portable manifests
-- `.claude-plugin/plugin.json`, `.mcp.json`: generated Claude Code compatibility
+The tests run offline with synthetic results and fake executables. They never touch a real account or personal files.
 
 ## License
 
